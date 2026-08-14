@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Video Player</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+        canvas {
+            background: #000;
+            border-radius: 4px;
+            display: block;
+            cursor: pointer;
+        }
+        /* Keep the actual video element hidden */
+        video {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Canvas Video Player</h2>
+    <input type="file" id="fileInput" accept="video/*">
+    <br>
+    <canvas id="videoCanvas" width="640" height="360"></canvas>
+    <!-- Hidden video element to pipe data into Canvas -->
+    <video id="hiddenVideo" crossOrigin="anonymous"></video>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const video = document.getElementById('hiddenVideo');
+    const canvas = document.getElementById('videoCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI Control Dimensions & Positions
+    const controlsHeight = 40;
+    let isMuted = false;
+    let volume = 1.0; 
+
+    // Handle File Upload
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const fileURL = URL.createObjectURL(file);
+            video.src = fileURL;
+            video.load();
+            video.play().catch(err => console.log("Auto-play blocked, waiting for user interaction."));
+        }
+    });
+
+    // Main Render Loop
+    function render() {
+        // Clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw Video Frame (leaving room at the bottom for controls)
+        if (video.readyState >= 2) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height - controlsHeight);
+        } else {
+            // Loading / Idle state
+            ctx.fillStyle = "#333";
+            ctx.font = "20px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(video.src ? "Loading..." : "Please choose a video file", canvas.width / 2, (canvas.height - controlsHeight) / 2);
+        }
+
+        // 2. Draw Controls Bar Background
+        ctx.fillStyle = "rgba(30, 30, 30, 0.9)";
+        ctx.fillRect(0, canvas.height - controlsHeight, canvas.width, controlsHeight);
+
+        // 3. Draw Play/Pause Button
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "14px Arial";
+        ctx.textAlign = "left";
+        const playText = video.paused ? "▶ Play" : "❚❚ Pause";
+        ctx.fillText(playText, 20, canvas.height - 15);
+
+        // 4. Draw Volume / Mute Button
+        let volumeText = `🔊 Vol: ${Math.round(volume * 100)}%`;
+        if (isMuted || volume === 0) {
+            volumeText = "🔇 Muted";
+        }
+        ctx.fillText(volumeText, 100, canvas.height - 15);
+
+        // 5. Draw a simple Volume Slider track
+        ctx.fillStyle = "#555";
+        ctx.fillRect(200, canvas.height - 24, 100, 8);
+        // Fill active volume
+        ctx.fillStyle = "#00adb5";
+        ctx.fillRect(200, canvas.height - 24, volume * 100, 8);
+
+        // Request next frame animation
+        requestAnimationFrame(render);
+    }
+
+    // Interactive Controls Logic via Canvas Click
+    canvas.addEventListener('click', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Check if user clicked within the controls bar zone
+        if (y > canvas.height - controlsHeight) {
+            // Clicked Play/Pause (approx bounds)
+            if (x > 15 && x < 80) {
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            }
+            // Clicked Mute/Unmute toggle (approx bounds)
+            else if (x > 95 && x < 180) {
+                isMuted = !isMuted;
+                video.muted = isMuted;
+            }
+            // Clicked inside the Volume Slider track (x: 200 to 300)
+            else if (x >= 200 && x <= 300) {
+                const clickedX = x - 200;
+                volume = clickedX / 100; // normalized 0 to 1
+                video.volume = volume;
+                if (isMuted && volume > 0) {
+                    isMuted = false;
+                    video.muted = false;
+                }
+            }
+        } else {
+            // Clicking the video screen itself toggles play/pause
+            if (video.src) {
+                if (video.paused) video.play();
+                else video.pause();
+            }
+        }
+    });
+
+    // Start the loop
+    render();
+</script>
+
+</body>
+</html>
